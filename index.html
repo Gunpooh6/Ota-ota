@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VORANC AND OTA OTA ADVENTURE | Hurghada 2026</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet JS Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        deepocean: '#023e8a',
+                        seafoam: '#00b4d8',
+                        warmgold: '#e0a96d',
+                        desertsand: '#f4a261',
+                        coralred: '#e76f51',
+                        darkbg: '#0a1128'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        };
+
+        // Tab Switching Logic (Defined in head to prevent ReferenceError on click)
+        let leafletMapInstance = null;
+
+        function switchTab(tabId) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(el => el.classList.add('hidden'));
+
+            // Show target tab
+            const target = document.getElementById('tab-' + tabId);
+            if (target) {
+                target.classList.remove('hidden');
+            }
+
+            // Update desktop active styles
+            const navBtns = document.querySelectorAll('.tab-btn');
+            navBtns.forEach(btn => {
+                btn.classList.remove('text-seafoam', 'bg-slate-800/80');
+                btn.classList.add('text-slate-300');
+            });
+            const activeNav = document.getElementById('nav-' + tabId);
+            if (activeNav) {
+                activeNav.classList.remove('text-slate-300');
+                activeNav.classList.add('text-seafoam', 'bg-slate-800/80');
+            }
+
+            // Update mobile active styles
+            const mobileNavBtns = document.querySelectorAll('.mobile-tab-btn');
+            mobileNavBtns.forEach(btn => {
+                btn.classList.remove('bg-slate-800', 'text-seafoam');
+                btn.classList.add('bg-slate-900', 'text-slate-300');
+            });
+            const activeMobileNav = document.getElementById('mobile-nav-' + tabId);
+            if (activeMobileNav) {
+                activeMobileNav.classList.remove('bg-slate-900', 'text-slate-300');
+                activeMobileNav.classList.add('bg-slate-800', 'text-seafoam');
+            }
+
+            // Initialize or resize map if switching to map tab
+            if (tabId === 'map') {
+                setTimeout(() => {
+                    if (!leafletMapInstance && typeof L !== 'undefined') {
+                        initMap();
+                    } else if (leafletMapInstance) {
+                        leafletMapInstance.invalidateSize();
+                    }
+                }, 100);
+            }
+        }
+
+        // Initialize Leaflet Map
+        function initMap() {
+            const mapContainer = document.getElementById('leaflet-map');
+            if (!mapContainer || leafletMapInstance) return;
+
+            // Hotel location [27.2476, 33.8340]
+            leafletMapInstance = L.map('leaflet-map').setView([27.23, 33.81], 12);
+
+            // Esri World Street Map tiles (No API key needed)
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom',
+                maxZoom: 18
+            }).addTo(leafletMapInstance);
+
+            // Markers
+            const hotelMarker = L.marker([27.2476, 33.8340]).addTo(leafletMapInstance);
+            hotelMarker.bindPopup("<b>King Tut Aqua Beach Resort</b><br>Your Resort Base").openPopup();
+
+            const diveMarker = L.marker([27.2280, 33.8400]).addTo(leafletMapInstance);
+            diveMarker.bindPopup("<b>Diamond Diving</b><br>3-Day Scuba Diving Course");
+
+            const airportMarker = L.marker([27.1801, 33.7994]).addTo(leafletMapInstance);
+            airportMarker.bindPopup("<b>Hurghada Airport (HRG)</b><br>Flight EZY8745 Arrival");
+
+            const safariMarker = L.marker([27.1700, 33.7000]).addTo(leafletMapInstance);
+            safariMarker.bindPopup("<b>Desert Quad Base</b><br>ATV Safari & Camel Ride");
+        }
+
+        // Checklist Storage Functions
+        function saveChecklist() {
+            const checkboxes = document.querySelectorAll('.chk-item');
+            const state = {};
+            checkboxes.forEach(chk => {
+                const id = chk.getAttribute('data-id');
+                if (id) state[id] = chk.checked;
+            });
+            localStorage.setItem('voranc_ota_packing_list', JSON.stringify(state));
+        }
+
+        function loadChecklist() {
+            const saved = localStorage.getItem('voranc_ota_packing_list');
+            if (!saved) return;
+            try {
+                const state = JSON.parse(saved);
+                document.querySelectorAll('.chk-item').forEach(chk => {
+                    const id = chk.getAttribute('data-id');
+                    if (id && state[id] !== undefined) {
+                        chk.checked = state[id];
+                    }
+                });
+            } catch (e) {
+                console.error("Error loading checklist", e);
+            }
+        }
+
+        function resetChecklist() {
+            document.querySelectorAll('.chk-item').forEach(chk => chk.checked = false);
+            localStorage.removeItem('voranc_ota_packing_list');
+        }
+
+        // Countdown Timer Logic
+        function startCountdown() {
+            // Flight Date: Sun 13 Dec 2026 at 12:10:00 GMT
+            const targetDate = new Date("2026-12-13T12:10:00Z").getTime();
+
+            function updateTimer() {
+                const now = new Date().getTime();
+                const diff = targetDate - now;
+
+                if (diff <= 0) {
+                    document.getElementById('timer-days').innerText = "00";
+                    document.getElementById('timer-hours').innerText = "00";
+                    document.getElementById('timer-mins').innerText = "00";
+                    document.getElementById('timer-secs').innerText = "00";
+                    return;
+                }
+
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+                const dEl = document.getElementById('timer-days');
+                const hEl = document.getElementById('timer-hours');
+                const mEl = document.getElementById('timer-mins');
+                const sEl = document.getElementById('timer-secs');
+
+                if (dEl) dEl.innerText = days.toString().padStart(2, '0');
+                if (hEl) hEl.innerText = hours.toString().padStart(2, '0');
+                if (mEl) mEl.innerText = mins.toString().padStart(2, '0');
+                if (sEl) sEl.innerText = secs.toString().padStart(2, '0');
+            }
+
+            updateTimer();
+            setInterval(updateTimer, 1000);
+        }
+
+        // Window Load Initialization
+        window.onload = function() {
+            startCountdown();
+            loadChecklist();
+        };
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .hero-pattern {
+            background-color: #0a1128;
+            background-image: radial-gradient(rgba(0, 180, 216, 0.15) 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+        #leaflet-map {
+            width: 100%;
+            height: 480px;
+            border-radius: 1rem;
+            z-index: 10;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #00b4d8;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-100 font-sans antialiased selection:bg-seafoam selection:text-darkbg min-h-screen flex flex-col">
+
+    <!-- Top Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <span class="text-2xl text-warmgold"><i class="fa-solid fa-compass"></i></span>
+                    <span class="font-heading font-extrabold text-lg sm:text-xl tracking-tight text-white uppercase">
+                        VORANC AND OTA OTA <span class="text-seafoam">ADVENTURE</span>
+                    </span>
+                </div>
+                
+                <!-- Desktop Navigation Links -->
+                <div class="hidden md:flex space-x-1 lg:space-x-2 text-sm font-semibold">
+                    <button onclick="switchTab('overview')" id="nav-overview" class="tab-btn px-3 py-2 rounded-lg text-seafoam bg-slate-800/80 transition">
+                        <i class="fa-solid fa-plane mr-1.5"></i> Overview & Countdown
+                    </button>
+                    <button onclick="switchTab('map')" id="nav-map" class="tab-btn px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">
+                        <i class="fa-solid fa-map-location-dot mr-1.5"></i> Interactive Map
+                    </button>
+                    <button onclick="switchTab('itinerary')" id="nav-itinerary" class="tab-btn px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">
+                        <i class="fa-solid fa-calendar-days mr-1.5"></i> Schedule & Costs
+                    </button>
+                    <button onclick="switchTab('packing')" id="nav-packing" class="tab-btn px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">
+                        <i class="fa-solid fa-list-check mr-1.5"></i> Checklist
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        7 Nights All-Inclusive
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Menu Bar -->
+        <div class="md:hidden flex overflow-x-auto border-t border-slate-800 px-2 py-2 gap-2 text-xs font-medium custom-scrollbar">
+            <button onclick="switchTab('overview')" id="mobile-nav-overview" class="mobile-tab-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 text-seafoam">Overview</button>
+            <button onclick="switchTab('map')" id="mobile-nav-map" class="mobile-tab-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-900 text-slate-300">Interactive Map</button>
+            <button onclick="switchTab('itinerary')" id="mobile-nav-itinerary" class="mobile-tab-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-900 text-slate-300">Daily Plan</button>
+            <button onclick="switchTab('packing')" id="mobile-nav-packing" class="mobile-tab-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-900 text-slate-300">Checklist</button>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="flex-grow pt-24 pb-12">
+
+        <!-- HEADER HERO SECTION -->
+        <header class="hero-pattern rounded-3xl mx-4 sm:mx-8 p-6 sm:p-12 mb-8 border border-slate-800 shadow-2xl relative overflow-hidden">
+            <div class="max-w-4xl mx-auto text-center relative z-10">
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 border border-warmgold/40 text-warmgold font-semibold text-xs sm:text-sm mb-4">
+                    <i class="fa-solid fa-umbrella-beach"></i> King Tut Aqua Beach Resort, Hurghada • Sun 13 Dec - Sun 20 Dec 2026
+                </div>
+                <h1 class="font-heading text-3xl sm:text-5xl md:text-6xl font-extrabold text-white mb-3 tracking-tight uppercase">
+                    VORANC AND OTA OTA <span class="text-transparent bg-clip-text bg-gradient-to-r from-seafoam via-warmgold to-coralred">ADVENTURE</span>
+                </h1>
+                <p class="text-sm sm:text-lg text-slate-300 max-w-2xl mx-auto mb-8 font-light leading-relaxed">
+                    Hurghada Father & Son Expedition • 3-Day Scuba Diving License Course with Diamond Diving • ATV Quad Desert Safari & Camel Ride
+                </p>
+
+                <!-- Countdown Timer -->
+                <div class="glass-panel rounded-2xl p-4 sm:p-6 max-w-2xl mx-auto border border-slate-700/60 shadow-xl mb-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-plane-departure text-seafoam"></i> Countdown to easyJet Flight EZY8745 (12:10 GMT)
+                    </h3>
+                    <div class="grid grid-cols-4 gap-2 sm:gap-4 text-center">
+                        <div class="bg-slate-900/90 p-2 sm:p-3 rounded-xl border border-slate-800">
+                            <span id="timer-days" class="font-heading font-extrabold text-xl sm:text-3xl text-white block">00</span>
+                            <span class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase">Days</span>
+                        </div>
+                        <div class="bg-slate-900/90 p-2 sm:p-3 rounded-xl border border-slate-800">
+                            <span id="timer-hours" class="font-heading font-extrabold text-xl sm:text-3xl text-white block">00</span>
+                            <span class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase">Hours</span>
+                        </div>
+                        <div class="bg-slate-900/90 p-2 sm:p-3 rounded-xl border border-slate-800">
+                            <span id="timer-mins" class="font-heading font-extrabold text-xl sm:text-3xl text-white block">00</span>
+                            <span class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase">Mins</span>
+                        </div>
+                        <div class="bg-slate-900/90 p-2 sm:p-3 rounded-xl border border-slate-800">
+                            <span id="timer-secs" class="font-heading font-extrabold text-xl sm:text-3xl text-seafoam block">00</span>
+                            <span class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase">Secs</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTENT TAB SECTIONS -->
+            <!-- TAB 3: INTERACTIVE MAP (ESRI WORLD STREET MAP TILES) -->
+            <section id="tab-map" class="tab-content hidden space-y-8">
+                <div class="bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-800">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-widest text-seafoam">Esri World Street Map Tiles</span>
+                            <h2 class="font-heading text-2xl sm:text-3xl font-extrabold text-white mt-1">Interactive Hurghada Map</h2>
+                            <p class="text-slate-400 text-sm mt-1">
+                                King Tut Aqua Beach Resort • Diamond Diving • Hurghada Airport (HRG) • Desert Safari Base
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Leaflet Container -->
+                    <div id="leaflet-map" class="border border-slate-700 shadow-2xl"></div>
+
+                    <!-- Key Location Pins Summary -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center text-sm font-bold shrink-0">
+                                1
+                            </div>
+                            <div>
+                                <h5 class="font-bold text-xs text-white">King Tut Aqua Beach Resort</h5>
+                                <p class="text-[11px] text-slate-400">Your Hotel Base [27.2476, 33.8340]</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm font-bold shrink-0">
+                                2
+                            </div>
+                            <div>
+                                <h5 class="font-bold text-xs text-white">Diamond Diving</h5>
+                                <p class="text-[11px] text-slate-400">Dive Center [27.2280, 33.8400]</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-seafoam/20 text-seafoam flex items-center justify-center text-sm font-bold shrink-0">
+                                3
+                            </div>
+                            <div>
+                                <h5 class="font-bold text-xs text-white">Hurghada Airport (HRG)</h5>
+                                <p class="text-[11px] text-slate-400">~12 km [27.1801, 33.7994]</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-warmgold/20 text-warmgold flex items-center justify-center text-sm font-bold shrink-0">
+                                4
+                            </div>
+                            <div>
+                                <h5 class="font-bold text-xs text-white">Desert Quad Base</h5>
+                                <p class="text-[11px] text-slate-400">Quad Safari [27.1700, 33.7000]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: DAILY ITINERARY & COSTS -->
+            <section id="tab-itinerary" class="tab-content hidden space-y-8">
+                <!-- Cost Breakdown Table -->
+                <div class="bg-slate-900 rounded-2xl p-6 border border-slate-800">
+                    <h3 class="font-heading font-bold text-xl text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-calculator text-warmgold"></i> Trip Cost & Activity Budget Breakdown
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs sm:text-sm text-slate-300">
+                            <thead class="bg-slate-950 text-slate-400 font-semibold uppercase text-[11px]">
+                                <tr>
+                                    <th class="p-3">Item / Activity</th>
+                                    <th class="p-3">Date</th>
+                                    <th class="p-3">Details</th>
+                                    <th class="p-3 text-right">Est. Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800">
+                                <tr>
+                                    <td class="p-3 font-semibold text-white">Flight & Hotel Package</td>
+                                    <td class="p-3 text-slate-400">13 Dec - 20 Dec</td>
+                                    <td class="p-3 text-slate-400">easyJet Flights + 7 Nights King Tut Aqua Beach Resort (All Inclusive)</td>
+                                    <td class="p-3 text-right font-bold text-emerald-400">Booked</td>
+                                </tr>
+                                <tr>
+                                    <td class="p-3 font-semibold text-white">Diamond Diving Open Water Course</td>
+                                    <td class="p-3 text-slate-400">15 Dec - 17 Dec</td>
+                                    <td class="p-3 text-slate-400">3-Day underwater license course with Diamond Diving, boat dives & equipment</td>
+                                    <td class="p-3 text-right font-bold text-seafoam">€345 (~£295)</td>
+                                </tr>
+                                <tr>
+                                    <td class="p-3 font-semibold text-white">ATV Desert Safari & BBQ</td>
+                                    <td class="p-3 text-slate-400">19 Dec</td>
+                                    <td class="p-3 text-slate-400">Quad bikes, camel ride, Bedouin village tea & sunset dinner show</td>
+                                    <td class="p-3 text-right font-bold text-warmgold">~£40 / person</td>
+                                </tr>
+                                <tr>
+                                    <td class="p-3 font-semibold text-white">Egypt Tourist Visa (Arrival)</td>
+                                    <td class="p-3 text-slate-400">13 Dec</td>
+                                    <td class="p-3 text-slate-400">Purchased in cash at Hurghada Airport passport counter</td>
+                                    <td class="p-3 text-right font-bold text-slate-200">$25 (~£20)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 7-Day Detailed Timeline -->
+                <div class="bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-800">
+                    <h3 class="font-heading font-extrabold text-2xl text-white mb-8 text-center">Day-by-Day Journey Plan</h3>
+
+                    <div class="relative border-l-2 border-slate-800 ml-4 sm:ml-28 space-y-8">
+                        
+                        <!-- Day 1 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 13</span>
+                                <span class="text-[11px] text-slate-400">Sunday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-orange-500 flex items-center justify-center text-orange-400 text-xs shadow-lg">
+                                <i class="fa-solid fa-plane"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                <span class="text-xs font-bold text-orange-400 uppercase tracking-wider block mb-1">Day 1 &bull; Travel Day</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Flight EZY8745 & Resort Check-In</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Depart London Gatwick at 12:10 GMT. Land in Hurghada at 19:30 local time. Purchase entry visa ($25 cash), board airport transfer to King Tut Aqua Beach Resort (~18 mins). Enjoy late night buffet dinner and drinks.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 2 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 14</span>
+                                <span class="text-[11px] text-slate-400">Monday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-seafoam flex items-center justify-center text-seafoam text-xs shadow-lg">
+                                <i class="fa-solid fa-water"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                <span class="text-xs font-bold text-seafoam uppercase tracking-wider block mb-1">Day 2 &bull; Resort Relax & Pool Orientation</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Aqua Park, Beach & Diamond Diving Registration</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Relax by the hotel pools and aqua slides. Swim and snorkel off the resort jetty. Check in with Diamond Diving team to confirm registration, paperwork, wetsuit sizes & gear fitting.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 3 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 15</span>
+                                <span class="text-[11px] text-slate-400">Tuesday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-seafoam flex items-center justify-center text-seafoam text-xs shadow-lg">
+                                <i class="fa-solid fa-mask-snorkel"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-seafoam/30">
+                                <span class="text-xs font-bold text-seafoam uppercase tracking-wider block mb-1">Day 3 &bull; Diamond Diving Course Day 1 (~€345)</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Theory & Confined Pool Skills</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    First day of underwater license training with Diamond Diving. Morning classroom theory covering breathing regulator safety, pressure equalization, and pool skills practice in shallow waters.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 4 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 16</span>
+                                <span class="text-[11px] text-slate-400">Wednesday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-seafoam flex items-center justify-center text-seafoam text-xs shadow-lg">
+                                <i class="fa-solid fa-ship"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-seafoam/30">
+                                <span class="text-xs font-bold text-seafoam uppercase tracking-wider block mb-1">Day 4 &bull; Diamond Diving Course Day 2</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Open Water Reef Dives 1 & 2</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Board the Diamond Diving boat from the marina. Complete first two open ocean reef dives at shallow Red Sea coral reefs. Spot marine life and practice underwater buoyancy control.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 5 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 17</span>
+                                <span class="text-[11px] text-slate-400">Thursday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 text-xs shadow-lg">
+                                <i class="fa-solid fa-graduation-cap"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-emerald-500/30">
+                                <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-1">Day 5 &bull; Diamond Diving Course Day 3</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Final Dives & License Graduation 🎓</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Complete final Open Water Dives 3 & 4 plus navigation test. Pass official Scuba Diving license exam with Diamond Diving! Receive certification logbook card and celebrate at the resort main bar.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 6 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 18</span>
+                                <span class="text-[11px] text-slate-400">Friday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-slate-600 flex items-center justify-center text-slate-400 text-xs shadow-lg">
+                                <i class="fa-solid fa-mug-hot"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Day 6 &bull; Day of Rest & Resort Snorkeling</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Rest Day & Coral Reef Snorkeling</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Relaxing rest day after 3 intense diving days. Enjoy the resort jetty coral reef, pools, and all-inclusive buffet lounge.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 7 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 19</span>
+                                <span class="text-[11px] text-slate-400">Saturday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-warmgold flex items-center justify-center text-warmgold text-xs shadow-lg">
+                                <i class="fa-solid fa-motorcycle"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-warmgold/30">
+                                <span class="text-xs font-bold text-warmgold uppercase tracking-wider block mb-1">Day 7 &bull; Desert Safari (~£40)</span>
+                                <h4 class="font-heading font-bold text-lg text-white">ATV Quad Biking, Camel Ride & Bedouin BBQ</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Mid-afternoon pickup for desert safari. Drive ATV quads through desert sand dunes, visit a Bedouin village, enjoy camel riding, sunset over the mountains, and Bedouin BBQ dinner with live show.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Day 8 -->
+                        <div class="relative pl-6 group">
+                            <div class="hidden sm:flex absolute -left-28 top-1 w-20 text-right flex-col">
+                                <span class="font-heading font-bold text-white text-sm">Dec 20</span>
+                                <span class="text-[11px] text-slate-400">Sunday</span>
+                            </div>
+                            <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-slate-900 border-2 border-orange-500 flex items-center justify-center text-orange-400 text-xs shadow-lg">
+                                <i class="fa-solid fa-plane-arrival"></i>
+                            </div>
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                <span class="text-xs font-bold text-orange-400 uppercase tracking-wider block mb-1">Day 8 &bull; Departure Day</span>
+                                <h4 class="font-heading font-bold text-lg text-white">Flight EZY8744 Back to London Gatwick</h4>
+                                <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                                    Morning hotel check-out. Transfer to Hurghada Airport (HRG) for easyJet flight EZY8744 departing at 17:45. Land at London Gatwick (LGW) at 21:45 GMT.
+                                </p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: PACKING CHECKLIST -->
+            <section id="tab-packing" class="tab-content hidden space-y-8">
+                <div class="bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-800">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-widest text-seafoam">Trip Preparation</span>
+                            <h2 class="font-heading text-2xl sm:text-3xl font-extrabold text-white mt-1">Interactive Packing Checklist</h2>
+                            <p class="text-slate-400 text-sm mt-1">Check items off as you pack. Progress is saved automatically in your browser.</p>
+                        </div>
+                        <button onclick="resetChecklist()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 self-start sm:self-center transition">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> Reset All
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        
+                        <!-- Diving Gear -->
+                        <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                            <h4 class="font-heading font-bold text-base text-seafoam mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-mask-snorkel"></i> Diving & Water Gear
+                            </h4>
+                            <div class="space-y-2.5">
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-1" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-seafoam bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Swimwear / Rash guards (2-3 pairs)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-2" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-seafoam bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Reef-safe Sunscreen (SPF 50+)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-3" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-seafoam bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Medical Release / Diamond Diving Form</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-4" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-seafoam bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Waterproof Phone Case / Underwater Cam</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Desert Safari Gear -->
+                        <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                            <h4 class="font-heading font-bold text-base text-warmgold mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-sun"></i> Desert Safari & Apparel
+                            </h4>
+                            <div class="space-y-2.5">
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-5" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-warmgold bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Sunglasses & ATV Headscarf/Shemagh</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-6" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-warmgold bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Closed Trainers / Outdoor Shoes</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-7" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-warmgold bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Light Jacket / Hoodie (Desert Evening)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-8" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-warmgold bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Resort Casual Dinner Clothes</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Documents & Cash -->
+                        <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                            <h4 class="font-heading font-bold text-base text-emerald-400 mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-passport"></i> Essentials & Currency
+                            </h4>
+                            <div class="space-y-2.5">
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-9" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-emerald-500 bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Passports (6+ Months Validity)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-10" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-emerald-500 bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Visa Cash ($25 USD per person)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-11" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-emerald-500 bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">Cash (€ / GBP for Diving & Desert Tips)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 cursor-pointer hover:bg-slate-800/80 transition text-xs sm:text-sm">
+                                    <input type="checkbox" data-id="chk-12" onchange="saveChecklist()" class="chk-item w-4 h-4 rounded text-emerald-500 bg-slate-800 border-slate-700">
+                                    <span class="text-slate-300">UK Power Adapter (Type C/F)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Leaflet Map JS script -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+</body>
+</html>
